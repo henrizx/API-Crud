@@ -5,30 +5,46 @@ var app = builder.Build();
 
 app.MapPost("/products", (Product product) =>
 {
-    ProductRepository.Add(product);
+    if (ProductRepository.GetBy(product.Code) != null)
+        return Results.Conflict("Product already exists");
 
+    ProductRepository.Add(product);
+    return Results.Created($"/products/{product.Code}", product.Code);
 });
 
 app.MapGet("/products/{code}", ([FromRoute] string code) =>
 {
     var product = ProductRepository.GetBy(code);
-    return product;
+    return product is not null
+        ? Results.Ok(product)
+        : Results.NotFound();
 });
 
-app.MapPut("/products", (Product product) =>
+app.MapPut("/products/{code}", (string code, Product product) =>
 {
-    var productSaved = ProductRepository.GetBy(product.Code);
+    var productSaved = ProductRepository.GetBy(code);
+
+    if (productSaved is null)
+        return Results.NotFound("Product not found");
+
     productSaved.Name = product.Name;
+    productSaved.Code = product.Code;
+
+    return Results.Ok(productSaved);
 });
 
 app.MapDelete("/products/{code}", ([FromRoute] string code) =>
 {
     var productSaved = ProductRepository.GetBy(code);
+
+    if (productSaved is null)
+        return Results.NotFound("Product not found");
+
     ProductRepository.Remove(productSaved);
+    return Results.Ok();
 });
 
 app.Run();
-
 
 public class Product
 {
@@ -38,15 +54,10 @@ public class Product
 
 public static class ProductRepository
 {
-    public static List<Product> Products { get; set; }
+    public static List<Product> Products { get; set; } = new();
 
     public static void Add(Product product)
     {
-        if (Products == null)
-        {
-            Products = new List<Product>();
-        }
-
         Products.Add(product);
     }
 
